@@ -1,5 +1,5 @@
 ## About The Project
-Mikrotik compatible Docker image to run Amnezia WG on Mikrotik routers. As of now, support Arm v7 boards
+Mikrotik compatible Docker image to run Amnezia WG on Mikrotik routers. As of now, support ARM64 boards(tested on hAP ax^3 7.15.3 (stable) as client and VPS amneziawg-linux-kernel-module@AlmaLinux9 as server)
 
 ## About The Project
 This is a highly experimental attempt to run [Amnezia-WG](https://github.com/amnezia-vpn/amnezia-wg) on a Mikrotik router.
@@ -9,70 +9,99 @@ This is a highly experimental attempt to run [Amnezia-WG](https://github.com/amn
 Follow the [Mikrotik guidelines](https://help.mikrotik.com/docs/display/ROS/Container) to enable container support.
 
 Install [Docker buildx](https://github.com/docker/buildx) subsystem, make and go.
+```
+for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do sudo apt-get remove $pkg; done
+sudo apt-get update
+sudo apt-get install ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+echo   "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" |   sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo apt install qemu-user-static
 
+``` 
 
 ### Building Docker Image
 
-You may need to initialize submodules
-
+You may need(nope) to initialize submodules
 ```
-git submodule init
-git submodule update
+git submodule add https://github.com/amnezia-vpn/amneziawg-go.git
 ```
 
-To build a Docker container for the ARM7 run
+To build a Docker container for the ARM64 v8 run
 ```
-make build-arm7
+DOCKER_BUILDKIT=1  docker buildx build --no-cache --platform linux/arm64/v8 --output=type=docker --tag docker-awg:latest .
 ```
-This command should cross-compile amnezia-wg locally and then build a docker image for ARM7 arch.
+This command should cross-compile amnezia-wg locally and then build a docker image for ARM64 arch.
 
 To export a generated image, use
 ```
-make export-arm7
+docker save docker-awg:latest > docker-awg-arm8.tar
 ```
 
-You will get the `docker-awg-arm7.tar` archive ready to upload to the Mikrotik router.
+You will get the `docker-awg-arm8.tar` archive ready to upload to the Mikrotik router.
 
 ### Running locally
 
 Just run `docker compose up`
 
-Make sure to create a `awg` folder with the `wg0.conf` file.
+Make sure to create a `wg` folder with the `awg0.conf` file.
 
-Example `wg0.conf`:
+Example client `awg0.conf`:
 
 ```
 [Interface]
-PrivateKey = gG...Y3s=
-Address = 10.0.0.1/32
+Address = 10.8.0.3/24
+DNS = 8.8.8.8, 8.8.4.4
+PrivateKey = SF..lQ=
 ListenPort = 51820
-# Jc лучше брать в интервале [3,10], Jmin = 100, Jmax = 1000,
-Jc = 3
-Jmin = 100
-Jmax = 1000
-# Parameters below will not work with the existing WireGuarg implementation.
-# Use if your peer running Amnesia-WG
-# S1 = 324
-# S2 = 452
-# H1 = 25
+MTU = 1420
+Jc = 1 ≤ Jc ≤ 128; recommended range is from 3 to 10 inclusive
+Jmin = Jmin < Jmax; recommended value is 50
+Jmax = Jmin < Jmax ≤ 1280; recommended value is 1000
+S1 = S1 < 1280; S1 + 56 ≠ S2; recommended range is from 15 to 150 inclusive 
+S2 = S2 < 1280; recommended range is from 15 to 150 inclusive
+H1 = H1/H2/H3/H4 — must be unique among each other; recommended range is from 5 to 2147483647 inclusive
+H2 = H1/H2/H3/H4 — must be unique among each other; recommended range is from 5 to 2147483647 inclusive
+H3 = H1/H2/H3/H4 — must be unique among each other; recommended range is from 5 to 2147483647 inclusive
+H4 = H1/H2/H3/H4 — must be unique among each other; recommended range is from 5 to 2147483647 inclusive
 
-# IP masquerading
-PreUp = iptables -t nat -A POSTROUTING ! -o %i -j MASQUERADE
-# Firewall wg peers from other hosts
-PreUp = iptables -A FORWARD -o %i -m state --state ESTABLISHED,RELATED -j ACCEPT
-PreUp = iptables -A FORWARD -o %i -j REJECT
-
-# Remote settings for my workstation
 [Peer]
-PublicKey = wx...U=
-AllowedIPs = 10.0.0.2/32
-# An IP address to check peer connectivity (specific to this repo)
-TestIP = 10.0.0.2
-# Your existing Wireguard server
-Endpoint=xx.xx.xx.xx:51820
-PersistentKeepalive = 25
+PublicKey = 33..0o=
+PresharedKey = qa..sY=
+AllowedIPs = don't use 0.0.0.0/0, include 10.8.0.0/24, exclude local networks, exclude Endpoint address -> https://www.procustodibus.com/blog/2021/03/wireguard-allowedips-calculator/
+Endpoint = xx.xx.xx.xx:51820
+PersistentKeepalive = 15
 
 ```
+
+Example server `awg0.conf`:
+
+```
+[Interface]
+Address = 10.8.0.1/24
+PrivateKey = KF..Uw=
+ListenPort = 51820
+MTU = 1420
+Jc = 1 ≤ Jc ≤ 128; recommended range is from 3 to 10 inclusive
+Jmin = Jmin < Jmax; recommended value is 50
+Jmax = Jmin < Jmax ≤ 1280; recommended value is 1000
+S1 = S1 < 1280; S1 + 56 ≠ S2; recommended range is from 15 to 150 inclusive 
+S2 = S2 < 1280; recommended range is from 15 to 150 inclusive
+H1 = H1/H2/H3/H4 — must be unique among each other; recommended range is from 5 to 2147483647 inclusive
+H2 = H1/H2/H3/H4 — must be unique among each other; recommended range is from 5 to 2147483647 inclusive
+H3 = H1/H2/H3/H4 — must be unique among each other; recommended range is from 5 to 2147483647 inclusive
+H4 = H1/H2/H3/H4 — must be unique among each other; recommended range is from 5 to 2147483647 inclusive
+
+[Peer]
+PublicKey = Fz..Dk=
+PresharedKey = qa..sY=
+AllowedIPs = 10.8.0.3/32, 172.17.0.1/32
+
+```
+
 
 ### Mikrotik Configuration
 
@@ -100,13 +129,45 @@ add action=masquerade chain=srcnat comment="Outgoing NAT for containers" src-add
 add action=dst-nat chain=dstnat comment=amnezia-wg dst-port=51820 protocol=udp to-addresses=172.17.0.2 to-ports=51820
 ```
 
+Mask our internal IP's from containers
+```
+/ip firewall nat
+add action=masquerade chain=srcnat out-interface=containers log=no log-prefix="" 
+```
+
+Add address list
+```
+/ip firewall address-list
+add address=2ip.ru list=rkn_wg
+```
+
+Add route mark
+```
+/ip firewall mangle
+add action=mark-routing chain=prerouting dst-address-list=rkn_wg \
+    new-routing-mark=wg_mark passthrough=yes
+```
+
+Add routing table
+```
+/routing table
+add disabled=no fib name=wg_mark
+```
+
+Add route for marked table
+```
+/ip route
+add disabled=no distance=2 dst-address=0.0.0.0/0 gateway=172.17.0.2 \
+    routing-table=wg_mark scope=30 suppress-hw-offload=no target-scope=10
+```
+
 Set up mount with the Wireguard configuration
 
 ```
 /container mounts
 add dst=/etc/amnezia/amneziawg/ name=awg_config src=/awg
 
-/container/add cmd=/sbin/init hostname=amnezia interface=veth1 logging=yes mounts=awg_config file=docker-awg-arm7.tar
+/container/add cmd=/sbin/init hostname=amnezia interface=veth1 logging=yes mounts=awg_config file=docker-awg-arm8.tar
 ```
 
 To start the container run

@@ -1,15 +1,22 @@
-ARG GOLANG_VERSION=1.21
-ARG ALPINE_VERSION=3.19
+ARG GOLANG_VERSION=1.22
+ARG ALPINE_VERSION=3.20
 FROM golang:${GOLANG_VERSION}-alpine${ALPINE_VERSION} AS builder
 
 RUN apk update && apk add --no-cache git make bash build-base linux-headers
+RUN git clone https://github.com/amnezia-vpn/amneziawg-go.git
 RUN git clone https://github.com/amnezia-vpn/amneziawg-tools.git
-RUN cd amneziawg-tools/src && \
-    make
+RUN cd /go/amneziawg-go && \
+    GOOS=linux GOARCH=arm64 make
+RUN cd /go/amneziawg-tools/src && \
+    GOOS=linux GOARCH=arm64 make
+
+
 
 FROM alpine:${ALPINE_VERSION}
-RUN apk update && apk add --no-cache bash openrc iptables iptables-legacy iproute2
-COPY amnezia-wg/amneziawg-go /usr/bin/amneziawg-go
+RUN apk update && apk add --no-cache bash openrc iptables-legacy iproute2 openresolv \
+    && mkdir -p /etc/amnezia/amneziawg/
+
+COPY --from=builder /go/amneziawg-go/amneziawg-go /usr/bin/amneziawg-go
 COPY --from=builder /go/amneziawg-tools/src/wg /usr/bin/awg
 COPY --from=builder /go/amneziawg-tools/src/wg-quick/linux.bash /usr/bin/awg-quick
 COPY wireguard-fs /
@@ -35,7 +42,6 @@ RUN \
 # register /etc/init.d/wg-quick
 RUN rc-update add wg-quick default
 
-
 VOLUME ["/sys/fs/cgroup"]
-HEALTHCHECK --interval=15m --timeout=30s CMD /bin/bash /data/healthcheck.sh
+HEALTHCHECK --interval=5m --timeout=30s CMD /bin/bash /data/healthcheck.sh
 CMD ["/sbin/init"]

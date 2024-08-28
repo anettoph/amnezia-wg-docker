@@ -14,4 +14,4 @@ services:
     ports:
     - 51820:51820/udp
     volumes:
-    - ./wg:/etc/wireguard
+    - ./wg:/etc/amnezia/amneziawg/
