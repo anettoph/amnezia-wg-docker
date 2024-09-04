@@ -27,7 +27,8 @@ sudo apt install qemu-user-static
 
 You may need(nope) to initialize submodules
 ```
-git submodule add https://github.com/amnezia-vpn/amneziawg-go.git
+git submodule add --force https://github.com/amnezia-vpn/amneziawg-go.git amneziawg-go
+git submodule update --init --force --remote
 ```
 
 To build a Docker container for the ARM64 v8 run
