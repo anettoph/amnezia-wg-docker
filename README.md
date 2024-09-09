@@ -1,8 +1,9 @@
 ## About The Project
-Mikrotik compatible Docker image to run Amnezia WG on Mikrotik routers. As of now, support ARM64 boards(tested on hAP ax^3 7.15.3 (stable) as client and VPS amneziawg-linux-kernel-module@AlmaLinux9 as server)
+Mikrotik compatible Docker image to run Amnezia WG over Xray/vless tunnel on Mikrotik routers. As of now, support ARM64 boards(tested on hAP ax^3 7.15.3 (stable) as client and VPS amneziawg-linux-kernel-module@AlmaLinux9 as server)
 
 ## About The Project
-This is a highly experimental attempt to run [Amnezia-WG](https://github.com/amnezia-vpn/amnezia-wg) on a Mikrotik router.
+This is a highly experimental attempt to run [Amnezia-WG](https://github.com/amnezia-vpn/amnezia-wg) over [Xray](https://computerscot.github.io/wireguard-over-xray.html) on a Mikrotik router in containers.
+[Xray-doc](https://xtls.github.io/ru/config/)
 
 ### Prerequisites
 
@@ -34,12 +35,14 @@ git submodule update --init --force --remote
 To build a Docker container for the ARM64 v8 run
 ```
 DOCKER_BUILDKIT=1  docker buildx build --no-cache --platform linux/arm64/v8 --output=type=docker --tag docker-awg:latest .
+cd Xray; DOCKER_BUILDKIT=1  docker buildx build --platform linux/arm64/v8 --build-arg TARGETPLATFORM=linux/arm64/v8 --output=type=docker --tag xray-arm64:latest .
 ```
 This command should cross-compile amnezia-wg locally and then build a docker image for ARM64 arch.
 
 To export a generated image, use
 ```
 docker save docker-awg:latest > docker-awg-arm8.tar
+cd Xray; docker save  xray-arm64:latest > xray-arm64.tar
 ```
 
 You will get the `docker-awg-arm8.tar` archive ready to upload to the Mikrotik router.
@@ -73,7 +76,7 @@ H4 = H1/H2/H3/H4 — must be unique among each other; recommended range is from 
 PublicKey = 33..0o=
 PresharedKey = qa..sY=
 AllowedIPs = don't use 0.0.0.0/0, include 10.8.0.0/24, exclude local networks, exclude Endpoint address -> https://www.procustodibus.com/blog/2021/03/wireguard-allowedips-calculator/
-Endpoint = xx.xx.xx.xx:51820
+Endpoint = 172.18.0.2:51820
 PersistentKeepalive = 15
 
 ```
@@ -114,18 +117,30 @@ add name=containers
 
 /interface veth
 add address=172.17.0.2/24 gateway=172.17.0.1 gateway6="" name=veth1
+add address=172.18.0.2/24 gateway=172.18.0.1 gateway6="" name=veth2
 
 /interface bridge port
 add bridge=containers interface=veth1
+add bridge=containers interface=veth2
 
 /ip address
 add address=172.17.0.1/24 interface=containers network=172.17.0.0
+add address=172.18.0.1/24 interface=containers network=172.18.0.0
 ```
+
+Add address list
+```
+/ip firewall address-list
+add address=172.18.0.0/24 list=containers
+add address=172.17.0.0/24 list=containers
+add address=2ip.ru list=rkn_wg
+```
+
 Set up masquerading for the outgoing traffic and dstnat
 
 ```
 /ip firewall nat
-add action=masquerade chain=srcnat comment="Outgoing NAT for containers" src-address=172.17.0.0/24
+add chain=srcnat action=masquerade comment="NAT for containers network" dst-address-list=!containers out-interface=containers
 /ip firewall nat
 add action=dst-nat chain=dstnat comment=amnezia-wg dst-port=51820 protocol=udp to-addresses=172.17.0.2 to-ports=51820
 ```
@@ -134,12 +149,6 @@ Mask our internal IP's from containers
 ```
 /ip firewall nat
 add action=masquerade chain=srcnat out-interface=containers log=no log-prefix="" 
-```
-
-Add address list
-```
-/ip firewall address-list
-add address=2ip.ru list=rkn_wg
 ```
 
 Add route mark
@@ -166,19 +175,23 @@ Set up mount with the Wireguard configuration
 
 ```
 /container mounts
-add dst=/etc/amnezia/amneziawg/ name=awg_config src=/awg
+add name="awg_conf" src="/usb1/docker/data/awg_conf" dst="/etc/amnezia/amneziawg/" 
+add name="xray_conf" src="/usb1/docker/data/xray_conf" dst="/etc/xray/" 
 
 /container/add cmd=/sbin/init hostname=amnezia interface=veth1 logging=yes mounts=awg_config file=docker-awg-arm8.tar
+/container/add cmd=/sbin/init hostname=xray interface=veth2 logging=yes mounts=xray_conf file=xray-arm64:latest
 ```
 
 To start the container run
 
 ```
-/container/start 0
+/container/start number=0
+/container/start number=1
 ```
 
 To get the container shell
 
 ```
-/container/shell 0
+/container/shell number=0
+/container/shell number=1
 ```
