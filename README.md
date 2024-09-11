@@ -76,7 +76,7 @@ H4 = H1/H2/H3/H4 — must be unique among each other; recommended range is from 
 PublicKey = 33..0o=
 PresharedKey = qa..sY=
 AllowedIPs = don't use 0.0.0.0/0, include 10.8.0.0/24, exclude local networks, exclude Endpoint address -> https://www.procustodibus.com/blog/2021/03/wireguard-allowedips-calculator/
-Endpoint = 172.18.0.2:51820
+Endpoint = 127.0.0.1:51821
 PersistentKeepalive = 15
 
 ```
@@ -117,7 +117,6 @@ add name=containers
 
 /interface veth
 add address=172.17.0.2/24 gateway=172.17.0.1 gateway6="" name=veth1
-add address=172.18.0.2/24 gateway=172.18.0.1 gateway6="" name=veth2
 
 /interface bridge port
 add bridge=containers interface=veth1
@@ -125,14 +124,11 @@ add bridge=containers interface=veth2
 
 /ip address
 add address=172.17.0.1/24 interface=containers network=172.17.0.0
-add address=172.18.0.1/24 interface=containers network=172.18.0.0
 ```
 
 Add address list
 ```
 /ip firewall address-list
-add address=172.18.0.0/24 list=containers
-add address=172.17.0.0/24 list=containers
 add address=2ip.ru list=rkn_wg
 ```
 
@@ -140,7 +136,7 @@ Set up masquerading for the outgoing traffic and dstnat
 
 ```
 /ip firewall nat
-add chain=srcnat action=masquerade comment="NAT for containers network" dst-address-list=!containers out-interface=containers
+add chain=srcnat action=masquerade comment="NAT for containers network" dst-address=!172.17.0.0/24 out-interface=containers
 /ip firewall nat
 add action=dst-nat chain=dstnat comment=amnezia-wg dst-port=51820 protocol=udp to-addresses=172.17.0.2 to-ports=51820
 ```
@@ -179,7 +175,7 @@ add name="awg_conf" src="/usb1/docker/data/awg_conf" dst="/etc/amnezia/amneziawg
 add name="xray_conf" src="/usb1/docker/data/xray_conf" dst="/etc/xray/" 
 
 /container/add cmd=/sbin/init hostname=amnezia interface=veth1 logging=yes mounts=awg_config file=docker-awg-arm8.tar
-/container/add cmd=/sbin/init hostname=xray interface=veth2 logging=yes mounts=xray_conf file=xray-arm64:latest
+/container/add cmd=/sbin/init hostname=xray interface=veth1 logging=yes mounts=xray_conf file=xray-arm64:latest
 ```
 
 To start the container run
