@@ -1,5 +1,5 @@
 ## About The Project
-Mikrotik compatible Docker image to run Amnezia WG over Xray/vless tunnel on Mikrotik routers. As of now, support ARM64 boards(tested on hAP ax^3 7.15.3 (stable) as client and VPS amneziawg-linux-kernel-module@AlmaLinux9 as server)
+Mikrotik compatible Docker image to run Amnezia WG over Xray(vless+reality) tunnel on Mikrotik routers. As of now, support ARM64 boards(tested on hAP ax^3 7.15.3 (stable) as client and VPS [amneziawg-linux-kernel-module](https://github.com/amnezia-vpn/amneziawg-linux-kernel-module)@AlmaLinux9 as server)
 
 ## About The Project
 This is a highly experimental attempt to run [Amnezia-WG](https://github.com/amnezia-vpn/amnezia-wg) over [Xray](https://computerscot.github.io/wireguard-over-xray.html) on a Mikrotik router in containers.

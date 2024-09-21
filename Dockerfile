@@ -3,17 +3,17 @@ ARG ALPINE_VERSION=3.20
 FROM golang:${GOLANG_VERSION}-alpine${ALPINE_VERSION} AS builder
 
 RUN apk update && apk add --no-cache git make bash build-base linux-headers
-RUN git clone https://github.com/amnezia-vpn/amneziawg-go.git
-RUN git clone https://github.com/amnezia-vpn/amneziawg-tools.git
-RUN cd /go/amneziawg-go && \
+RUN git clone https://github.com/amnezia-vpn/amneziawg-go.git && \
+    cd /go/amneziawg-go && \
     GOOS=linux GOARCH=arm64 make
-RUN cd /go/amneziawg-tools/src && \
+RUN git clone https://github.com/amnezia-vpn/amneziawg-tools.git && \
+    cd /go/amneziawg-tools/src && \
     GOOS=linux GOARCH=arm64 make
 
 
 FROM alpine:${ALPINE_VERSION}
-RUN apk update && apk add --no-cache bash openrc iptables-legacy iproute2 openresolv \
-    && mkdir -p /etc/amnezia/amneziawg/
+RUN apk update && apk add --no-cache bash openrc iptables-legacy iproute2 openresolv && \
+    mkdir -p /etc/amnezia/amneziawg/
 
 COPY --from=builder /go/amneziawg-go/amneziawg-go /usr/bin/amneziawg-go
 COPY --from=builder /go/amneziawg-tools/src/wg /usr/bin/awg
@@ -33,7 +33,7 @@ RUN \
     rm \
         /etc/init.d/hwdrivers \
         /etc/init.d/machine-id
-RUN    sed -i 's/cmd sysctl -q \(.*\?\)=\(.*\)/[[ "$(sysctl -n \1)" != "\2" ]] \&\& \0/' /usr/bin/awg-quick
+RUN sed -i 's/cmd sysctl -q \(.*\?\)=\(.*\)/[[ "$(sysctl -n \1)" != "\2" ]] \&\& \0/' /usr/bin/awg-quick
 RUN \
     ln -s /sbin/iptables-legacy /bin/iptables && \
     ln -s /sbin/iptables-legacy-save /bin/iptables-save && \
